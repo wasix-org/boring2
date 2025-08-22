@@ -579,7 +579,13 @@ fn built_boring_source_path(config: &Config) -> &PathBuf {
             cfg.env("CMAKE_BUILD_PARALLEL_LEVEL", threads.to_string());
         }
 
-        if config.features.fips {
+        if config.target.contains("wasmer") {
+            cfg.define(
+                "CMAKE_TOOLCHAIN_FILE",
+                config.manifest_dir.join("wasix-toolchain.cmake"),
+            )
+            .define("OPENSSL_NO_ASM", "ON");
+        } else if config.features.fips {
             let (clang, clangxx) = verify_fips_clang_version();
             cfg.define("CMAKE_C_COMPILER", clang)
                 .define("CMAKE_CXX_COMPILER", clangxx)
@@ -739,7 +745,19 @@ fn main() {
         .clang_arg("-I")
         .clang_arg(include_path.display().to_string());
 
-    if let Some(sysroot) = &config.env.sysroot {
+    if config.target.contains("wasmer") {
+        let output = Command::new("wasixcc")
+            .arg("--print-sysroot")
+            .output()
+            .unwrap();
+        let sysroot = String::from_utf8_lossy(&output.stdout);
+        builder = builder
+            .clang_arg("--sysroot")
+            .clang_arg(sysroot.trim())
+            // When using bindgen with WASIX, visibility is set to hidden by default,
+            // so we need to override it
+            .clang_arg("-fvisibility=default");
+    } else if let Some(sysroot) = &config.env.sysroot {
         builder = builder
             .clang_arg("--sysroot")
             .clang_arg(sysroot.display().to_string());
