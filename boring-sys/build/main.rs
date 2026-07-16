@@ -746,14 +746,29 @@ fn main() {
         .clang_arg(include_path.display().to_string());
 
     if config.target.contains("wasmer") {
-        let output = Command::new("wasixcc")
-            .arg("--print-sysroot")
+        // `wasixcc --print-sysroot` was removed from newer wasixcc releases;
+        // `wasixccenv print-sysroot` is the supported way to locate it. A
+        // silently-empty sysroot makes libclang parse the headers without a
+        // libc, which degrades cross-header types into opaque bindings.
+        let output = Command::new("wasixccenv")
+            .arg("print-sysroot")
             .output()
             .unwrap();
-        let sysroot = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            output.status.success(),
+            "wasixccenv print-sysroot failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let sysroot = stdout.trim().lines().last().expect("empty sysroot output").trim();
+        assert!(!sysroot.is_empty(), "wasixccenv reported an empty sysroot");
         builder = builder
+            // libclang doesn't know the wasm32-wasmer-wasi triple bindgen
+            // infers from TARGET; parse as plain wasm32-wasi instead
+            // (wasixcc does the same translation for C compilation).
+            .clang_arg("--target=wasm32-wasi")
             .clang_arg("--sysroot")
-            .clang_arg(sysroot.trim())
+            .clang_arg(sysroot)
             // When using bindgen with WASIX, visibility is set to hidden by default,
             // so we need to override it
             .clang_arg("-fvisibility=default");
