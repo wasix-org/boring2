@@ -18,6 +18,7 @@ include = [
     "/*.toml",
     "/LICENSE-MIT",
     "/cmake/*.cmake",
+    "/wasix-toolchain.cmake",
     # boringssl (non-FIPS)
     "/deps/boringssl/src/util/32-bit-toolchain.cmake",
     "/deps/boringssl/**/*.[chS]",
